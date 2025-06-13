@@ -1,1 +1,27 @@
+[workspace]
+channels = ["https://prefix.dev/conda-forge"]
+name = "pixi-sam2"
+platforms = ["linux-64"]
+version = "0.1.0"
 
+[system-requirements]
+cuda = "12.8"
+
+[tasks]
+cuda-test = "python -c 'import torch; print(torch.cuda.is_available())'"
+sam-train = "OPENBLAS_NUM_THREADS=2 python sam2/training/train.py -c configs/sam2.1_training/sam_train_config.yaml --use-cluster 0 --num-gpus 2"
+sam-train-single-gpu = "OPENBLAS_NUM_THREADS=1 CUDA_VISIBLE_DEVICES=1 python sam2/training/train.py -c configs/sam2.1_training/sam_train_config.yaml --use-cluster 0 --num-gpus 1"
+
+
+[dependencies]
+python = "==3.11.12"
+pip = "<25.3"
+setuptools = "<81"
+cuda-version = "12.8.*"
+
+[pypi-dependencies]
+torch = { version = ">=2.5.1", index = "https://download.pytorch.org/whl/cu128" }
+torchvision = { version = ">=0.20.1", index = "https://download.pytorch.org/whl/cu128" }
+
+[pypi-options]
+extra-index-urls = ["https://download.pytorch.org/whl/cu128"]
