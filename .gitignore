@@ -198,5 +198,5 @@ cython_debug/
 /data/annotated data sets/
 /data/datasets/
 /data/original_images/
-/env_backup/
+/local_env_backup/
 /tests/
