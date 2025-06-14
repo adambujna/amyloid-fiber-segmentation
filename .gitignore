@@ -198,6 +198,7 @@ cython_debug/
 .gitignore
 /data/annotated data sets/
 /data/datasets/sam_dataset/
+/data/datasets/source_dataset/
 /data/datasets/yolo_dataset/
 /data/datasets/sam_dataset.zip
 /data/datasets/yolo_dataset.zip
