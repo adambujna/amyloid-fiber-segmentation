@@ -195,8 +195,12 @@ cython_debug/
 .cursorindexingignore
 
 # Not relevant
+.gitignore
 /data/annotated data sets/
-/data/datasets/
+/data/datasets/sam_dataset/
+/data/datasets/yolo_dataset/
+/data/datasets/sam_dataset.zip
+/data/datasets/yolo_dataset.zip
 /data/original_images/
 /local_env_backup/
 /tests/
