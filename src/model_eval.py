@@ -114,6 +114,6 @@ def evaluate_model(model: Yolo11SegmenterEM, test_image_dir: str, test_annotatio
 if __name__ == "__main__":
     model = Yolo11SegmenterEM('../models/best.pt')
     evaluate_model(model,
-                   test_image_dir='/Users/ab/Documents/AIDS/Bachelors Thesis/Code/data/test_synthetic_images/images',
-                   test_annotation_dir='/Users/ab/Documents/AIDS/Bachelors Thesis/Code/data/test_synthetic_images/labels',
+                   test_image_dir='../data/test_synthetic_images/images',
+                   test_annotation_dir='../data/test_synthetic_images/labels',
                    output_file='output.csv')

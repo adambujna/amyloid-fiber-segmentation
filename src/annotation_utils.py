@@ -34,3 +34,7 @@ def create_image_entry(img_name, image_size, image_id):
         "width": width,
         "date_captured": datetime.now().isoformat()
     }
+
+
+def read_real_em_annotation(annot_file):
+    raise NotImplementedError
