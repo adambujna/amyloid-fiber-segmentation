@@ -16,9 +16,9 @@ ZIP_FILE_SAM="$BASE_URL/sam_dataset.zip"
 
 
 echo "Downloading YOLO dataset..."
-$CMD $ZIP_FILE_YOLO || { echo "Failed to download checkpoint from $sam2p1_hiera_t_url"; exit 1; }
+$CMD $ZIP_FILE_YOLO || { echo "Failed to download dataset from $ZIP_FILE_YOLO"; exit 1; }
 
 echo "Downloading SAM dataset..."
-$CMD $ZIP_FILE_SAM || { echo "Failed to download checkpoint from $sam2p1_hiera_t_url"; exit 1; }
+$CMD $ZIP_FILE_SAM || { echo "Failed to download dataset from $ZIP_FILE_SAM"; exit 1; }
 
 echo "Successfully downloaded datasets."
