@@ -6,7 +6,7 @@ if command -v wget &> /dev/null; then
 elif command -v curl &> /dev/null; then
     CMD="curl -L -O"
 else
-    echo "Please install wget or curl to download the checkpoints."
+    echo "Please install wget or curl to download the datasets."
     exit 1
 fi
 
