@@ -205,3 +205,4 @@ cython_debug/
 /data/original_images/
 /local_env_backup/
 /tests/
+/notebooks/figures/
