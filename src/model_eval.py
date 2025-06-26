@@ -100,7 +100,7 @@ def load_gt_masks_sam(annotation_file: str) -> list[np.ndarray]:
 
 
 def evaluate_model(model: YOLO | SAM | str, test_image_dir: str, test_annotation_dir: str,
-                   batch: int = 32, output_file: str = None, use_sam_annots: bool = True):
+                   batch: int = 32, output_file: str = None, use_sam_annots: bool = True, verbose=True):
     if isinstance(model, str):
         try:
             model = YOLO(model)
@@ -160,7 +160,8 @@ def evaluate_model(model: YOLO | SAM | str, test_image_dir: str, test_annotation
                 "num_pred": len(pred_masks),
             })
 
-            print(f"\t\nEvaluated {filename}\nF1={f1:.2f}\nPrecision={precision:.2f}\nRecall={recall:.2f}")
+            if verbose:
+                print(f"\t\nEvaluated {filename}\nF1={f1:.2f}\nPrecision={precision:.2f}\nRecall={recall:.2f}")
 
     if output_file:
         df = pd.DataFrame(results)
@@ -169,10 +170,10 @@ def evaluate_model(model: YOLO | SAM | str, test_image_dir: str, test_annotation
 
 
 if __name__ == "__main__":
-    model = YOLO('../models/best.pt')
+    model = YOLO('../models/yolo11large.pt')
     evaluate_model(model,
                    test_image_dir='../data/datasets/sam_dataset/test/images',
                    test_annotation_dir='../data/datasets/sam_dataset/test/images',
                    batch=32,
                    use_sam_annots=True,
-                   output_file='output.csv')
+                   output_file='../data/results/yolo11large.csv')
