@@ -13,6 +13,7 @@ fi
 BASE_URL="https://liacs.leidenuniv.nl/~s3610233/thesis/"
 ZIP_FILE_YOLO="$BASE_URL/yolo_dataset.zip"
 ZIP_FILE_SAM="$BASE_URL/sam_dataset.zip"
+ZIP_FILE_REAL="$BASE_URL/real_dataset.zip"
 
 
 echo "Downloading YOLO dataset..."
@@ -20,5 +21,8 @@ $CMD $ZIP_FILE_YOLO || { echo "Failed to download dataset from $ZIP_FILE_YOLO"; 
 
 echo "Downloading SAM dataset..."
 $CMD $ZIP_FILE_SAM || { echo "Failed to download dataset from $ZIP_FILE_SAM"; exit 1; }
+
+echo "Downloading REAL dataset..."
+$CMD $ZIP_FILE_REAL || { echo "Failed to download dataset from $ZIP_FILE_REAL"; exit 1; }
 
 echo "Successfully downloaded datasets."
