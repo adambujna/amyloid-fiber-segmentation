@@ -168,6 +168,8 @@ def evaluate_model(model: YOLO | SAM | str, test_image_dir: str, test_annotation
         df.to_csv(output_file, index=False)
         print(f"Saved results to {output_file}")
 
+    return results
+
 
 if __name__ == "__main__":
     model = YOLO('../models/yolo11large.pt')
