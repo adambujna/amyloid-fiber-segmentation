@@ -86,8 +86,8 @@ class Yolo11SegmenterEM:
 
 
 if __name__ == '__main__':
-    sample_image = '/Users/ab/Documents/AIDS/Bachelors Thesis/Code/data/images/image_0.png'
-    model = Yolo11SegmenterEM(weights='/Users/ab/Documents/AIDS/Bachelors Thesis/Code/models/best.pt')
+    sample_image = '../data/images/image_0.png'
+    model = Yolo11SegmenterEM(weights='../models/best.pt')
 
-    output = model('/Users/ab/Documents/AIDS/Bachelors Thesis/Code/data/annotated data sets/set '
+    output = model('../data/annotated data sets/set '
                    '1/007_XG_medium fibril_ua__10kx_56.6px_100nm.tif', plot=True)
