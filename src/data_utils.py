@@ -71,15 +71,13 @@ def resize_image(image_path: str, size: int | tuple[int, int], save_dir: str = N
 
             # Resize mask
             resized_mask = cv.resize(mask, size, interpolation=cv.INTER_NEAREST)
-            new_annots.append(create_annotation_entry(resized_mask, ann.get('id', 0), size))
+            new_annots.append(create_annotation_entry(resized_mask, ann.get('id', 0), size[::-1]))
         data['annotations'] = new_annots
 
         # Save new json
         new_json_path = os.path.join(new_label_dir, os.path.basename(sam_json))
         with open(new_json_path, 'w') as f:
             json.dump(data, f)
-
-
 
 
 def resize_images_dir(image_dir: str, size: int | tuple[int, int], save_dir: str = None,
@@ -105,7 +103,7 @@ def resize_images_dir(image_dir: str, size: int | tuple[int, int], save_dir: str
     """
     if save_dir is None:
         save_dir = image_dir
-    os.makedirs(image_dir, exist_ok=True)
+    os.makedirs(save_dir, exist_ok=True)
 
     fnames = os.listdir(image_dir)
     fnames = [f for f in fnames if f.lower().endswith(valid_extensions)]
@@ -190,8 +188,7 @@ def split_image_datapoint_yolo(image_path: str, label_path: str = None,
         Returns paths to the newly created images and labels of newly created labels.
     """
 
-    if image_save_dir is None:
-        image_save_dir = os.path.dirname(image_path)
+    image_save_dir = image_save_dir or os.path.dirname(image_path)
     if label_save_dir is None:
         label_save_dir = os.path.dirname(label_path) if label_path else None
     os.makedirs(image_save_dir, exist_ok=True)
@@ -221,11 +218,11 @@ def split_image_datapoint_yolo(image_path: str, label_path: str = None,
     tiles, positions = tile_image(image, annotations, size=size, min_overlap=min_overlap, verbose=verbose)
 
     # Save tiles as separate images with location embedding.
-    original_name = os.path.basename(image_path)
+    original_name = os.path.splitext(os.path.basename(image_path))[0]
     new_image_names = []
     for (img, labels), pos in zip(tiles, positions):
         y1, x1, y2, x2 = pos
-        new_name = f"{original_name}_{y1}_{x1}_{y2}_{x2}"
+        new_name = f"{y1}_{x1}_{y2}_{x2}_{original_name}"
         new_image_names.append(new_name)
 
         cv.imwrite(os.path.join(image_save_dir, f'{new_name}.png'), img)
@@ -247,7 +244,71 @@ def split_image_datapoint_sam(image_path: str, mask_path: str = None,
                               size: tuple[int, int] = (1024, 1024), min_overlap: int = 256,
                               image_save_dir: str = None, mask_save_dir: str = None,
                               verbose: int = 0) -> tuple[list[str], list[str]]:
-    raise NotImplementedError
+    if mask_path is None:
+        mask_path = os.path.splitext(image_path)[0] + ".json"
+
+    image_save_dir = image_save_dir or os.path.dirname(image_path)
+    mask_save_dir = mask_save_dir or image_save_dir
+    os.makedirs(image_save_dir, exist_ok=True)
+    os.makedirs(mask_save_dir, exist_ok=True)
+
+    img = cv.imread(image_path)
+    if img is None:
+        raise FileNotFoundError(image_path)
+
+    with open(mask_path, "r") as f:
+        src_json = json.load(f)
+
+    # Decode all source masks once
+    decoded_masks = []
+    for ann in src_json["annotations"]:
+        rle = ann["segmentation"]
+        decoded_masks.append(mask_utils.decode(rle))
+
+    tiles, positions = tile_image(img,
+                                  labels=None,
+                                  size=size,
+                                  min_overlap=min_overlap,
+                                  verbose=verbose)
+
+    orig_stem = os.path.splitext(os.path.basename(image_path))[0]
+    img_id = orig_stem.split("_")[-1]
+    new_img_id = int(img_id)*100
+
+    out_img_paths, out_json_paths = [], []
+
+    for i, ((tile_img, _), (y1, x1, y2, x2)) in enumerate(zip(tiles, positions)):
+        curr_im_id = new_img_id + i
+
+        tile_ann_entries = []
+        for j, m in enumerate(decoded_masks):
+            crop = m[y1:y2, x1:x2]
+            if crop.any():
+                tile_ann_entries.append(
+                    create_annotation_entry(crop, curr_im_id + j, size)
+                )
+
+        # build image entry
+        base_name = f"{y1}_{x1}_{y2}_{x2}_{orig_stem}"
+        img_fname = f"{base_name}.png"
+        img_entry = create_image_entry(base_name, size, curr_im_id)
+
+        # save tile image
+        cv.imwrite(os.path.join(image_save_dir, img_fname), tile_img)
+
+        # save tile JSON
+        tile_json = {"image": img_entry, "annotations": tile_ann_entries}
+        json_path = os.path.join(mask_save_dir, f"{base_name}.json")
+        with open(json_path, "w") as f:
+            json.dump(tile_json, f)
+
+        out_img_paths.append(os.path.abspath(os.path.join(image_save_dir, img_fname)))
+        out_json_paths.append(os.path.abspath(json_path))
+
+        if verbose:
+            print(f"Saved {base_name}: {len(tile_ann_entries)} objects")
+
+    return out_img_paths, out_json_paths
 
 
 def split_images_dir(image_dir: str, label_dir: str, size: tuple[int, int] = (1024, 1024), min_overlap: int = 256,
@@ -292,7 +353,7 @@ def split_images_dir(image_dir: str, label_dir: str, size: tuple[int, int] = (10
             print(f'\r({i+1}/{len(all_image_paths)}) Processing {image_path}', end='', flush=True)
 
         filename = os.path.splitext(os.path.basename(image_path))[0]
-        label_path = os.path.join(label_dir, f"{filename}.txt" if annotation_format == 'yolo' else f"{filename}.png")
+        label_path = os.path.join(label_dir, f"{filename}.txt" if annotation_format == 'yolo' else f"{filename}.json")
 
         if annotation_format == 'yolo':
             image_paths, label_paths = split_image_datapoint_yolo(
