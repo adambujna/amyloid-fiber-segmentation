@@ -208,3 +208,6 @@ cython_debug/
 /notebooks/figures/
 /data/real datasets/
 /data/datasets/real_dataset/
+/data/sam ckpts/
+/data/results/sam ckpts/
+/model_training/
