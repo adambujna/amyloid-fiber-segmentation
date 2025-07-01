@@ -19,7 +19,7 @@ class Yolo11SegmenterEM:
             min_overlap = int(min(self.tile_height, self.tile_width) * 0.2)
         self.min_overlap = min_overlap
 
-    def predict(self, img: np.ndarray | str, plot: bool = False) -> list[np.ndarray]:
+    def __call__(self, img: np.ndarray | str, plot: bool = False) -> list[np.ndarray]:
         if isinstance(img, str):
             img = cv.imread(img)
             if img is None:
@@ -86,8 +86,8 @@ class Yolo11SegmenterEM:
 
 
 if __name__ == '__main__':
-    sample_image = '/Users/ab/Documents/AIDS/Bachelors Thesis/Code/data/images/image_0.png'
-    model = Yolo11SegmenterEM(weights='/Users/ab/Documents/AIDS/Bachelors Thesis/Code/models/best.pt')
+    sample_image = '../data/images/image_0.png'
+    model = Yolo11SegmenterEM(weights='../models/best.pt')
 
-    output = model.predict('/Users/ab/Documents/AIDS/Bachelors Thesis/Code/data/annotated data sets/set '
-                           '1/007_XG_medium fibril_ua__10kx_56.6px_100nm.tif', plot=True)
+    output = model('../data/annotated data sets/set '
+                   '1/007_XG_medium fibril_ua__10kx_56.6px_100nm.tif', plot=True)

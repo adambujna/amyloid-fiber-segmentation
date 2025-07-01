@@ -196,7 +196,7 @@ cython_debug/
 
 # Not relevant
 .gitignore
-/data/annotated data sets/
+/data/real datasets/
 /data/datasets/sam_dataset/
 /data/datasets/source_dataset/
 /data/datasets/yolo_dataset/
@@ -205,3 +205,10 @@ cython_debug/
 /data/original_images/
 /local_env_backup/
 /tests/
+/notebooks/figures/
+/data/real datasets/
+/data/datasets/real_dataset/
+/data/sam ckpts/
+/data/results/sam ckpts/
+/model_training/
+/data/datasets/real_dataset.zip

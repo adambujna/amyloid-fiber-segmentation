@@ -1,23 +1,50 @@
 import cv2 as cv
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.patheffects as pe
 
 
-def plot_masks(masks: list[np.ndarray], background: str | np.ndarray):
+def plot_masks(masks: list[np.ndarray], background: str | np.ndarray, save: bool = False, figname: str = 'masks.png'):
     if isinstance(background, str):
+        imname = background
         background = cv.imread(background, cv.IMREAD_GRAYSCALE)
         if background is None:
-            raise FileNotFoundError(f"Could not load background image from {background}")
+            raise FileNotFoundError(f"Could not load background image from {imname}")
     else:
         background = background.copy()[:, :, 0]
 
-    combined = np.zeros_like(background, dtype=np.uint16)
-    for i, mask in enumerate(masks):
-        mask = cv.resize(mask, background.shape[:2][::-1], interpolation=cv.INTER_LINEAR)
-        combined = np.where(mask > 0, i + 1, combined)
+    H, W = background.shape[:2]
+    combined = np.zeros((H, W), dtype=np.uint16)
+
+    centroids = []
+    for idx, m in enumerate(masks, start=1):
+        m = cv.resize(m, (W, H), interpolation=cv.INTER_NEAREST)
+        combined = np.where(m > 0, idx, combined)
+
+        ys, xs = np.where(m > 0)
+        if len(xs):
+            xc, yc = xs.mean(), ys.mean()
+            centroids.append((xc, yc))
+        else:
+            centroids.append((None, None))
 
     plt.figure(figsize=(12, 8))
     plt.imshow(background, cmap='gray')
-    plt.imshow(combined, cmap='nipy_spectral', alpha=0.5, interpolation='none')
+    plt.imshow(combined, cmap='nipy_spectral', alpha=0.3, interpolation='none')
+
+    for idx, (xc, yc) in enumerate(centroids, start=1):
+        if xc is None:
+            continue
+        plt.text(
+            xc + 10, yc + 10, str(idx),
+            color="white", fontsize=8, weight="light",
+            ha="center", va="center",
+            path_effects=[pe.withStroke(linewidth=2, foreground="black")]
+        )
+
     plt.title("Merged Mask IDs")
+    plt.tight_layout()
+    if save:
+        plt.savefig(figname,
+                    dpi=300)
     plt.show()
