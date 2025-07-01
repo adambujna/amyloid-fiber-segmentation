@@ -55,6 +55,7 @@ def add_noise(image: np.ndarray, noise_strength: float = 10.0) -> np.ndarray:
 
 def get_length(mask: np.ndarray) -> float:
     """Applies the Zhang-Suen thinning algorithm to get a 1 px wide skeleton whose sum is the length in pixels."""
+    mask *= 255 / np.max(mask)
     skeleton = cv.ximgproc.thinning(mask, thinningType=cv.ximgproc.THINNING_ZHANGSUEN)
     return np.sum(skeleton > 0)
 
