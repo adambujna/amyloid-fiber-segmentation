@@ -210,5 +210,5 @@ cython_debug/
 /data/datasets/real_dataset/
 /data/sam ckpts/
 /data/results/sam ckpts/
-/model_training/
+/model_training_full/
 /data/datasets/real_dataset.zip
