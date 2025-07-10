@@ -8,8 +8,18 @@ from src.annotation_utils import create_image_entry, create_annotation_entry
 
 
 def save_image(image_name: str, image: np.ndarray, save_dir: str) -> None:
-    """Saves an image to disk."""
+    """
+    Saves an NumPy array as an image.
 
+    Parameters
+    ----------
+    image_name : str
+        The base name for the output image file (without extension).
+    image : np.ndarray
+        The image array to be saved.
+    save_dir : str
+        The directory where the image will be saved.
+    """
     os.makedirs(save_dir, exist_ok=True)
     cv.imwrite(os.path.join(save_dir, f'{image_name}.png'), image)
 
@@ -17,19 +27,36 @@ def save_image(image_name: str, image: np.ndarray, save_dir: str) -> None:
 def resize_image(image_path: str, size: int | tuple[int, int], save_dir: str = None,
                  sam_format: bool = False, sam_json: str = None, new_label_dir: str = None) -> None:
     """
-    Resizes an image to a given size and saves it.
+    Resizes an image and, if applicable, its corresponding annotations.
+    Saves image as PNG.
+
+    If `size` is an integer, it scales the image's largest dimension to `size` while maintaining the aspect ratio.
+    If `size` is a tuple (width, height), it stretches the image to those exact dimensions.
+
+    It also resizes the segmentation masks within a corresponding JSON annotation file
+    to match the new image dimensions.
 
     Parameters
     ----------
-    image_path: str
-        Path to image which will be resized.
-
-    size: int | tuple[int, int]
-        If int, will scale the image so that the largest side is equal to size while maintaining the aspect ratio.
-        If tuple (height, width), the image is stretched to that specific size.
-
-    save_dir: str, optional
-        Directory where the resized image will be saved. None overwrites the original image. Defaults to None.
+    image_path : str
+        Path to the image to be resized.
+    size : int | tuple[int, int]
+        The target size for the output image.
+    save_dir : str, optional
+        Directory to save the resized image.
+        If None, overwrites the original image.
+        Default is None.
+    sam_format : bool, optional
+        If True, the function will also attempt to resize annotations in a
+        corresponding SA1B formatted JSON file.
+        Default is False.
+    sam_json : str, optional
+        Path to the SA1B JSON annotation file to be resized.
+        Required if `sam_format` is True.
+    new_label_dir : str, optional
+        Directory to save the resized annotation file.
+        If None, overwrites the original JSON.
+        Default is None.
     """
 
     if save_dir is None:    # Overwrites if different save_dir not specified.
@@ -46,6 +73,7 @@ def resize_image(image_path: str, size: int | tuple[int, int], save_dir: str = N
         scale = size / max(w, h)
         size = (int(w * scale), int(h * scale))
     # Also tried Lanczos interpolation from OpenCV but maintained noise extremely well, so not worth.
+    size = size[:2]
     resized_img = cv.resize(image, size, interpolation=cv.INTER_AREA)
     cv.imwrite(new_path, resized_img)
 
@@ -84,22 +112,29 @@ def resize_images_dir(image_dir: str, size: int | tuple[int, int], save_dir: str
                       sam_format: bool = False, sam_json_dir: str = None, new_label_dir: str = None,
                       valid_extensions: tuple[str, ...] = ('.jpg', '.jpeg', '.png', '.bmp', '.tiff')) -> None:
     """
-    Resizes all images in a source directory using `resize_image`.
+    Resizes all images in a source directory by applying `resize_image` to each.
+
+    Can optionally resize the corresponding SA1B formatted JSON annotations.
 
     Parameters
     ----------
-    image_dir: str
-        Path to directory containing images to resize.
-
-    size: int | tuple[int, int]
-        Desired size (same as in `resize_image`).
-
-    save_dir: str, optional
-        Destination directory to save resized images.
-        Will overwrite the original images if None or the same as image_dir.
-
-    valid_extensions: tuple[str, ...], optional
-        File extensions considered as valid image types.
+    image_dir : str
+        Path to the directory containing images to resize.
+    size : int | tuple[int, int]
+        The target size, passed to `resize_image`.
+    save_dir : str, optional
+        Destination directory for resized images.
+        If None, overwrites the original images.
+        Default is None.
+    sam_format : bool, optional
+        If True, enables resizing of corresponding SA1B annotations from JSON.
+    sam_json_dir : str, optional
+        The directory containing the original JSON annotation files.
+        Required if `sam_format` is True.
+    new_label_dir : str, optional
+        The directory where resized JSON files will be saved.
+    valid_extensions : tuple[str, ...], optional
+        A tuple of file extensions to be considered as valid images.
     """
     if save_dir is None:
         save_dir = image_dir
@@ -107,20 +142,43 @@ def resize_images_dir(image_dir: str, size: int | tuple[int, int], save_dir: str
 
     fnames = os.listdir(image_dir)
     fnames = [f for f in fnames if f.lower().endswith(valid_extensions)]
+
     for i, filename in enumerate(fnames):
-        if filename.lower().endswith(valid_extensions):
-            print(f'\r({i+1}/{len(fnames)}) Resizing {filename} to {size}', end='', flush=True)
-            src_path = os.path.join(image_dir, filename)
-            json_path = None
-            if sam_format and sam_json_dir is not None:
-                json_path = os.path.join(sam_json_dir, f"{os.path.splitext(filename)[0]}.json")
-            resize_image(src_path, size=size, save_dir=save_dir,
-                         sam_format=sam_format, sam_json=json_path, new_label_dir=new_label_dir)
+        if not filename.lower().endswith(valid_extensions):     # Skip invalid images
+            continue
+
+        print(f'\r({i+1}/{len(fnames)}) Resizing {filename} to {size}', end='', flush=True)
+
+        # Get image's path
+        src_path = os.path.join(image_dir, filename)
+        # Get JSON path
+        json_path = None
+        if sam_format and sam_json_dir is not None:
+            json_path = os.path.join(sam_json_dir, f"{os.path.splitext(filename)[0]}.json")
+
+        # Resize image and, if applicable, annotation
+        resize_image(src_path, size=size, save_dir=save_dir,
+                     sam_format=sam_format, sam_json=json_path, new_label_dir=new_label_dir)
 
 
 def save_label_yolo(image_name: str, contours: list[np.ndarray], image_size: tuple[int, int], label_dir: str) -> None:
-    """Saves fiber contours in YOLO label annotation_format for segmentation."""
+    """
+    Saves fiber contours in YOLO label annotation_format for segmentation.
 
+    This function normalizes the contours to be relative to the image dimensions (0-1) and
+    saves them one line per object.
+
+    Parameters
+    ----------
+    image_name : str
+        The name for the output label file (without extension).
+    contours : list[np.ndarray]
+        A list of contours, where each contour is a NumPy array of points.
+    image_size : tuple[int, int]
+        The (height, width) of the image, used for normalization.
+    label_dir : str
+        The directory where the .txt label file will be saved.
+    """
     os.makedirs(label_dir, exist_ok=True)
 
     # Normalize contours to be relative to image size
@@ -134,9 +192,23 @@ def save_label_yolo(image_name: str, contours: list[np.ndarray], image_size: tup
         file.write(formatted_contours)
 
 
-def save_label_sam(image_name: str, masks: list[np.ndarray], label_dir: str,
-                   add_bboxes=True, add_points=True) -> None:
-    """Saves fiber mask in SA1B-Dataset JSON annotation format."""
+def save_label_sam(image_name: str, masks: list[np.ndarray], label_dir: str) -> None:
+    """
+    Saves fiber mask in SA1B-Dataset formatted JSON.
+
+    Creates an image information dictionary with `create_image_entry` and
+    annotation dictionary with `create_annotation_entry` and
+    merges them into the JSON entry of an image with labels.
+
+    Parameters
+    ----------
+    image_name : str
+        The base name for the output JSON file (without extension).
+    masks : list[np.ndarray]
+        A list of binary segmentation masks for the objects in the image.
+    label_dir : str
+        The directory where the .json label file will be saved.
+    """
     os.makedirs(label_dir, exist_ok=True)
     image_id = int(image_name.split('_')[-1])
 
@@ -184,8 +256,7 @@ def split_image_datapoint_yolo(image_path: str, label_path: str = None,
 
     Returns
     -------
-    Tuple[list[str], list[str]]
-        Returns paths to the newly created images and labels of newly created labels.
+    Tuple[list[str], list[str]]: Paths to the newly created images and labels of newly created labels.
     """
 
     image_save_dir = image_save_dir or os.path.dirname(image_path)
@@ -244,6 +315,37 @@ def split_image_datapoint_sam(image_path: str, mask_path: str = None,
                               size: tuple[int, int] = (1024, 1024), min_overlap: int = 256,
                               image_save_dir: str = None, mask_save_dir: str = None,
                               verbose: int = 0) -> tuple[list[str], list[str]]:
+    """
+    Reads an existing image and its labels in SA1B annotation_format and
+    saves them as several overlapping mosaic images with new labels in SA1B annotation_format.
+
+    Parameters
+    ----------
+    image_path : str
+        Path to the source image to be split.
+    mask_path : str, optional
+        Path to the corresponding JSON annotation file.
+        If None, it is inferred from the image path.
+    size : tuple[int, int], optional
+        The (height, width) of each output tile.
+        Default is (1024, 1024).
+    min_overlap : int, optional
+        Minimum pixel overlap between adjacent tiles.
+        Default is 256.
+    image_save_dir : str, optional
+        Directory to save the output image tiles.
+        Default is the source image directory if None.
+    mask_save_dir : str, optional
+        Directory to save the new JSON annotation files.
+        Default is the image_save_dir if None.
+    verbose : int, optional
+        Verbosity level for printing progress information.
+        Default is 0.
+
+    Returns
+    -------
+    Tuple[list[str], list[str]]: Paths to the newly created images and labels of newly created labels.
+    """
     if mask_path is None:
         mask_path = os.path.splitext(image_path)[0] + ".json"
 
@@ -324,15 +426,20 @@ def split_images_dir(image_dir: str, label_dir: str, size: tuple[int, int] = (10
     label_dir: str
         Directory containing label files or mask paths corresponding to the images.
     size : tuple[int, int], optional
-        Size of each output tile image. Default is (1024, 1024).
+        Size of each output tile image.
+        Default is (1024, 1024).
     min_overlap: int, optional
-        Minimum overlap between tiles. Default is 256.
+        Minimum overlap between tiles.
+        Default is 256.
     image_save_dir: str, optional
-        Directory to save the output tile images. Defaults to image_dir if None.
+        Directory to save the output tile images.
+        Default is image_dir if None.
     label_save_dir: str, optional
-        Directory to save the output tile labels. Defaults to label_dir if None.
+        Directory to save the output tile labels.
+        Default is label_dir if None.
     annotation_format: str, optional
-        Format of the labels. Defaults to 'yolo'.
+        Format of the labels ('sam' or 'yolo').
+        Default is 'yolo'.
     verbose: int, optional
         Verbosity level.
 

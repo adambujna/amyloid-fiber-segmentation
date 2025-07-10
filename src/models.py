@@ -5,20 +5,52 @@ from ultralytics import YOLO, SAM
 from torch import cuda, mps
 from abc import abstractmethod
 
-from src.tiling import tile_image, merge_masks
+from src.tiling import tile_image, merge_masks, BoundingBox
 from src.gui import plot_masks
 
 
 class BaseSegmenter:
     """
-    A base class for segmenting images by resizing/tiling them.
-    This class implements the common methods for preprocessing, tiling, and merging.
+    A base class for segmenting images by resizing and tiling them, and then merging results.
+    This class provides a shared framework for handling large images that do not match or
+    exceed the input size of a model.
 
     Does not perform predictions itself.
-    """
 
+    Attributes
+    ----------
+    tile_height : int
+        The height of each tile.
+    tile_width : int
+        The width of each tile.
+    image_height : int
+        The target height to which input images are resized.
+    image_width : int
+        The target width to which input images are resized.
+    model : object
+        The segmentation model, loaded by a subclass.
+    min_overlap : int
+        The minimum overlap in pixels between adjacent tiles.
+    device : str
+        The pytorch device ('cuda', 'mps', or 'cpu') selected for inference.
+    """
     def __init__(self, image_size: tuple[int, int] = (1024, 1365),
                  input_size: tuple = (1024, 1024), min_overlap: int = None):
+        """
+        Initializes the BaseSegmenter with configuration for tiling and processing.
+
+        Parameters
+        ----------
+        image_size : tuple[int, int], optional
+            The (height, width) to which the full input image will be resized before tiling.
+            Default is (1024, 1365).
+        input_size : tuple, optional
+            The (height, width) of the individual tiles that the model expects as input.
+            Defaults to (1024, 1024).
+        min_overlap : int, optional
+            The minimum number of pixels of overlap between adjacent tiles.
+            If None, defaults to 20% of the smaller tile dimension.
+        """
         self.tile_height = input_size[0]
         self.tile_width = input_size[1]
         self.image_height = image_size[0]
@@ -38,11 +70,51 @@ class BaseSegmenter:
 
     @abstractmethod
     def _predict_on_tile(self, tile: np.ndarray, **kwargs) -> list[np.ndarray]:
-        """Implemented by the model-specific subclasses."""
+        """
+        Implemented by the model-specific subclasses.
+
+        Parameters
+        ----------
+        tile : np.ndarray
+            The image tile to be processed by the model.
+        **kwargs
+            Additional model-specific arguments (e.g., prompt points for SAM).
+
+        Returns
+        -------
+        list[np.ndarray]: A list of binary masks.
+        """
         raise TypeError("This method is specific to `Yolo11SegmenterEM` or `SAM2SegmenterEM` and cannot "
                         "be called from `BaseSegmenter`.")
 
     def __call__(self, img: np.ndarray | str, plot: bool = False, save: bool = False, **kwargs) -> list[np.ndarray]:
+        """
+        Performs end-to-end segmentation on a full image.
+
+        This method executes the prediction pipeline of:
+        1. Loading and resizing the image.
+        2. Splitting it into a grid of overlapping tiles.
+        3. Running inference on each tile.
+        4. Merging the resulting masks.
+
+        Parameters
+        ----------
+        img : np.ndarray | str
+            The input image as a NumPy array or a string path to the image file.
+        plot : bool, optional
+            If True, displays the final segmentation masks overlaid on the original
+            image.
+            Default is False.
+        save : bool, optional
+            If True and `plot` is also True, saves the prediction plot image to a file.
+            Default is False.
+        **kwargs
+            Additional arguments to be passed to the `_predict_on_tile` method.
+
+        Returns
+        -------
+        list[np.ndarray]: A list of the final, merged binary segmentation masks for the entire image.
+        """
         imname = None
         if isinstance(img, str):
             imname = img
@@ -84,8 +156,21 @@ class BaseSegmenter:
 
         return final_masks
 
-    def _get_image_grid(self, img: np.ndarray):
-        """Tiles image into overlapping tiles."""
+    def _get_image_grid(self, img: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Tiles image into a 2D grid of overlapping tiles.
+
+        Parameters
+        ----------
+        img : np.ndarray
+            The resized image to be tiled.
+
+        Returns
+        -------
+        tuple[np.ndarray, np.ndarray]: Tuple containing:
+            1. A 2D NumPy array of image tiles.
+            2. A 2D NumPy array of the corresponding tile positions (x1, y1, x2, y2).
+        """
         tiles, positions = tile_image(img, size=(self.tile_height, self.tile_width), min_overlap=self.min_overlap)
         images = [img for (img, annot) in tiles]
 
@@ -97,8 +182,28 @@ class BaseSegmenter:
         return image_grid, pos_grid
 
     @staticmethod
-    def _merge_pairwise(m1, p1, m2, p2):
-        merged = merge_masks(p1, p2, m1, m2)
+    def _merge_pairwise(masks_1: list[np.ndarray], p1: BoundingBox,
+                        masks_2: list[np.ndarray], p2: BoundingBox) -> tuple[list[np.ndarray], BoundingBox]:
+        """
+        Merges the segmentation masks from two adjacent, overlapping tiles.
+
+        Parameters
+        ----------
+        masks_1 : list[np.ndarray]
+            List of masks from the first tile.
+        p1 : tuple[x1, y1, x2, y2]
+            Position of the first tile (x1, y1, x2, y2).
+        masks_2 : list[np.ndarray]
+            List of masks from the second tile.
+        p2 : tuple[x1, y1, x2, y2]
+            Position of the second tile.
+
+        Returns
+        -------
+        tuple[list[np.ndarray], tuple[x1, y1, x2, y2]]:
+            Tuple (list of merged masks, bounding box of merged tiles)
+        """
+        merged = merge_masks(p1, p2, masks_1, masks_2)
         merged_pos = (
             min(p1[0], p2[0]), min(p1[1], p2[1]),
             max(p1[2], p2[2]), max(p1[3], p2[3])
@@ -107,12 +212,40 @@ class BaseSegmenter:
 
 
 class Yolo11SegmenterEM(BaseSegmenter):
-    """YOLO Segmenter."""
+    """
+    A segmenter for electron microscopy images using a YOLOv11 model.
+
+    This class inherits from `BaseSegmenter` and implements the prediction logic for the YOLO model.
+    """
     def __init__(self, weights: str, **kwargs):
+        """
+        Initializes the YOLOv11 segmenter.
+
+        Parameters
+        ----------
+        weights : str
+            Path to the YOLO model's pre-trained weights file (.pt).
+        **kwargs
+            Arguments passed to the `BaseSegmenter` constructor.
+        """
         super().__init__(**kwargs)
         self.model = YOLO(weights)
 
     def _predict_on_tile(self, tile: np.ndarray, **kwargs) -> list[np.ndarray]:
+        """
+        Runs YOLOv11 inference on a single image tile.
+
+        Parameters
+        ----------
+        tile : np.ndarray
+            The image to be processed.
+        **kwargs
+            Additional arguments (unused).
+
+        Returns
+        -------
+        list[np.ndarray]: A list of predicted binary masks.
+        """
         results = self.model.predict(tile,
                                      conf=0.15,
                                      device=self.device,
@@ -129,20 +262,52 @@ class Yolo11SegmenterEM(BaseSegmenter):
 
 
 class SAM2SegmenterEM(BaseSegmenter):
-    """SAM segmenter."""
+    """
+    A segmenter for electron microscopy images using a SAM v2.1 model.
 
+    This class inherits from `BaseSegmenter` and implements the prediction logic for the SAM model.
+    The SAM model can take prompts (points/masks/bboxes/labels) for guided segmentation.
+    """
     def __init__(self, weights: str, **kwargs):
+        """
+        Initializes the SAMv2.1 segmenter.
+
+        Parameters
+        ----------
+        weights : str
+            Path to the SAM model's pre-trained weights file (.pt).
+        **kwargs
+            Arguments passed to the `BaseSegmenter` constructor.
+        """
         super().__init__(**kwargs)
         self.model = SAM(weights)
 
     def _predict_on_tile(self, tile: np.ndarray, **kwargs) -> list[np.ndarray]:
-        points = kwargs.get('points')  # SAM needs points, get it from kwargs
+        """
+        Runs SAMv2.1 inference on a single image tile.
+
+        Parameters
+        ----------
+        tile : np.ndarray
+            The image to be processed.
+        **kwargs
+            Additional arguments, expected to contain 'points', 'masks', 'bboxes', 'labels' for SAM prompts.
+            Prompting is optional.
+
+        Returns
+        -------
+        list[np.ndarray]: A list of predicted binary masks.
+        """
         results = self.model.predict(tile,
                                      conf=0.5,
                                      iou=0.7,
                                      device=self.device,
                                      verbose=False,
-                                     points=points)[0]
+                                     points=kwargs.get('points'),
+                                     bboxes=kwargs.get('bboxes'),
+                                     masks=kwargs.get('masks'),
+                                     labels=kwargs.get('labels')
+                                     )[0]
         masks = []
 
         if results.masks is not None:
@@ -154,7 +319,7 @@ class SAM2SegmenterEM(BaseSegmenter):
 
 
 if __name__ == '__main__':
-    # Imports oinly required for SAM2
+    # Imports only required for SAM2
     from src.annotation_utils import load_gt_masks_sam, sample_points
 
     sample_image = '../data/datasets/real_dataset/images_raw/test/015_XG_short fibril_ua__10kx_56.6px_100nm.png_2002.png'
@@ -164,9 +329,9 @@ if __name__ == '__main__':
 
     # Only required for SAM2
     gt_masks = load_gt_masks_sam(sample_labels)
-    points = []
+    points_prompt = []
     for m in [cv.resize(m, (1365, 1024)) for m in gt_masks]:
-        points.append(sample_points(m, 1))
+        points_prompt.append(sample_points(m, n_points=1))
 
     # Passing `points` arg also only required for SAM
-    output = model(sample_image, plot=True, save=False, points=np.array(points))
+    _ = model(sample_image, plot=True, save=False, points=np.array(points_prompt))

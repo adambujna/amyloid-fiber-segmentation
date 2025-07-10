@@ -5,6 +5,22 @@ import matplotlib.patheffects as pe
 
 
 def plot_masks(masks: list[np.ndarray], background: str | np.ndarray, save: bool = False, figname: str = 'masks.png'):
+    """
+    Plots binary masks overlaid on top of an image.
+
+    Parameters
+    ----------
+    masks : list[np.ndarray]
+        The list of binary masks.
+    background : str | np.ndarray
+        The background image as a NumPy array or path to the background image.
+    save : bool, optional
+        Whether to save the figure as a png file.
+        Default is False.
+    figname : str, optional
+        The saved plot's image file name.
+        Default is 'masks.png'.
+    """
     if isinstance(background, str):
         imname = background
         background = cv.imread(background, cv.IMREAD_GRAYSCALE)
@@ -16,6 +32,7 @@ def plot_masks(masks: list[np.ndarray], background: str | np.ndarray, save: bool
     H, W = background.shape[:2]
     combined = np.zeros((H, W), dtype=np.uint16)
 
+    # Centroids for writing mask numbers to distinguish them
     centroids = []
     for idx, m in enumerate(masks, start=1):
         m = cv.resize(m, (W, H), interpolation=cv.INTER_NEAREST)
@@ -28,10 +45,12 @@ def plot_masks(masks: list[np.ndarray], background: str | np.ndarray, save: bool
         else:
             centroids.append((None, None))
 
+    # Plot
     plt.figure(figsize=(12, 8))
-    plt.imshow(background, cmap='gray')
-    plt.imshow(combined, cmap='nipy_spectral', alpha=0.3, interpolation='none')
+    plt.imshow(background, cmap='gray')     # Plot background image
+    plt.imshow(combined, cmap='nipy_spectral', alpha=0.3, interpolation='none')     # Plot masks
 
+    # Plot a number next to each mask
     for idx, (xc, yc) in enumerate(centroids, start=1):
         if xc is None:
             continue

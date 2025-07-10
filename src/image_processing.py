@@ -6,7 +6,20 @@ SqrtPi = np.sqrt(np.pi)
 
 
 def random_noise(image: np.ndarray, noise_level: float = 10.0) -> np.ndarray:
-    """Adds Gaussian noise to an image."""
+    """
+    Adds Gaussian noise to an image.
+
+    Parameters
+    ----------
+    image : np.ndarray
+        Input image.
+    noise_level : float
+        Standard deviation of the noise.
+
+    Returns
+    -------
+    np.ndarray: Image with noise added.
+    """
     noise = np.random.normal(loc=0, scale=noise_level, size=image.shape).astype(np.float64)
     noise = cv.add(image.astype(np.float64), noise)
     return noise.clip(0, 255).astype(np.uint8)
@@ -33,8 +46,7 @@ def add_noise(image: np.ndarray, noise_strength: float = 10.0) -> np.ndarray:
 
     Returns
     -------
-    out : np.ndarray
-        Noisy image produced by adding noise to the input image.
+    np.ndarray: Noisy image produced by adding noise to the input image.
     """
 
     # Low grain noise
@@ -54,7 +66,19 @@ def add_noise(image: np.ndarray, noise_strength: float = 10.0) -> np.ndarray:
 
 
 def get_length(mask: np.ndarray) -> float:
-    """Applies the Zhang-Suen thinning algorithm to get a 1 px wide skeleton whose sum is the length in pixels."""
+    """
+    Applies the Zhang-Suen thinning algorithm to get a 1 px wide skeleton
+     whose sum is the length of the object in pixels.
+
+    Parameters
+    ----------
+    mask : np.ndarray
+        Input binary mask.
+
+    Returns
+    -------
+    float: The length of the skeleton.
+    """
     mask *= 255 / np.max(mask)
     skeleton = cv.ximgproc.thinning(mask, thinningType=cv.ximgproc.THINNING_ZHANGSUEN)
     return np.sum(skeleton > 0)

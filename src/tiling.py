@@ -4,7 +4,10 @@ from typing import List, Tuple
 
 # Types
 Annotations = List[Tuple[int, List[Tuple[int, int]]]]
+"""Annotations as a list of tuples of (class_index, positions), where positions are a list of tuples (y, x)"""
+
 BoundingBox = Tuple[int, int, int, int]
+"""Bounding box represented as a tuple (y1, x1, y2, x2)"""
 
 
 def tile_image(image: np.ndarray, labels: Annotations = None,
@@ -18,6 +21,28 @@ def tile_image(image: np.ndarray, labels: Annotations = None,
     where A is array size, W is window size, and O is overlap size.
 
     The overlap to fit exactly without padding is then O = (A - NW) / (1 - N).
+
+    Parameters
+    ----------
+    image : np.ndarray
+        The image to be tiled.
+    labels : Annotations
+        The annotation data for the image to be tiled.
+    size : tuple[int, int], optional
+        The size of each tile.
+        Default is (1024, 1024).
+    min_overlap : int, optional
+        The minimum overlap of neighboring tiles in pixels.
+        Default is 256.
+    verbose : int, optional
+        The verbosity level.
+        Default is 0.
+
+    Returns
+    -------
+    tuple[list[tuple[np.ndarray, Annotations]], list[BoundingBox]]: Two lists containing:
+        1. The image tiles and their new annotations
+        2. The bounding boxes of all tiles as (y1, x1, y2, x2).
     """
     # Calculate overlap
     H, W = image.shape[:2]
@@ -80,7 +105,20 @@ def tile_image(image: np.ndarray, labels: Annotations = None,
 
 def shift_contours(cons: list[np.ndarray], x: int, y: int) -> list[np.ndarray]:
     """
-    Shifts a contour as an array of points on X and Y axes.
+    Shifts a list of contours by a given (x, y) offset.
+
+    Parameters
+    ----------
+    cons : list[np.ndarray]
+        A list of contours to be shifted.
+    x : int
+        The horizontal offset to add to each point.
+    y : int
+        The vertical offset to add to each point.
+
+    Returns
+    -------
+    list[np.ndarray]: The list of translated contours.
     """
     shifted = cons[:]
     for c in shifted:
@@ -89,7 +127,21 @@ def shift_contours(cons: list[np.ndarray], x: int, y: int) -> list[np.ndarray]:
     return shifted
 
 
-def polygon_iou(poly1, poly2):
+def polygon_iou(poly1: np.ndarray, poly2: np.ndarray) -> float:
+    """
+    Calculates the Intersection over Union (IoU) between two polygons.
+
+    Parameters
+    ----------
+    poly1 : np.ndarray
+        The first polygon.
+    poly2 : np.ndarray
+        The second polygon.
+
+    Returns
+    -------
+    float: The IoU between `poly1` and `poly2`.
+    """
     if len(poly1) == 0 or len(poly2) == 0:
         return 0.0
     polygon1, polygon2 = sp.Polygon(poly1), sp.Polygon(poly2)
@@ -100,7 +152,21 @@ def polygon_iou(poly1, poly2):
     return intersection / union
 
 
-def mask_iou(mask1, mask2):
+def mask_iou(mask1: np.ndarray, mask2: np.ndarray) -> float:
+    """
+    Calculates the Intersection over Union (IoU) between two binary masks.
+
+    Parameters
+    ----------
+    mask1 : np.ndarray
+        The first polygon.
+    mask2 : np.ndarray
+        The second polygon.
+
+    Returns
+    -------
+    float: The IoU between `poly1` and `poly2`.
+    """
     intersection = np.logical_and(mask1, mask2).sum()
     union = np.logical_or(mask1, mask2).sum()
     return intersection / union if union > 0 else 0.0
@@ -109,6 +175,32 @@ def mask_iou(mask1, mask2):
 def merge_contours(pos1: tuple[int, int, int, int], pos2: tuple[int, int, int, int],
                    cons1: list[np.ndarray] = None, cons2: list[np.ndarray] = None,
                    iou_threshold: float = 0.5) -> list[np.ndarray]:
+    """
+    Merges contours of two adjacent, overlapping tiles.
+
+    This function merges objects that are split across two tiles based on their
+    similarity in the overlapping region of the two tiles.
+
+    Unmatched contours, or those which are not in the overlapping region are kept as they are.
+
+    Parameters
+    ----------
+    pos1 : tuple[int, int, int, int]
+        The (y1, x1, y2, x2) position of the first tile.
+    pos2 : tuple[int, int, int, int]
+        The (y1, x1, y2, x2) position of the second tile.
+    cons1 : list[np.ndarray], optional
+        The list of contours from the first tile.
+    cons2 : list[np.ndarray], optional
+        The list of contours from the second tile.
+    iou_threshold : float, optional
+        The minimum IoU for two intersecting contours to be considered a match and be merged.
+        Default is 0.5.
+
+    Returns
+    -------
+    list[np.ndarray]: A single list containing the new contours post-merge.
+    """
     if not cons1:
         return cons2 if cons2 else []
     if not cons2:
@@ -192,6 +284,32 @@ def merge_contours(pos1: tuple[int, int, int, int], pos2: tuple[int, int, int, i
 def merge_masks(pos1: tuple[int, int, int, int], pos2: tuple[int, int, int, int],
                 mask1_list: list[np.ndarray] = None, mask2_list: list[np.ndarray] = None,
                 iou_threshold: float = 0.5) -> list[np.ndarray]:
+    """
+    Merges masks on two adjacent, overlapping tiles.
+
+    This function merges object binary masks that are split across two tiles based on their
+    similarity in the overlapping region of the two tiles.
+
+    Unmatched masks, or those which are not in the overlapping region are kept as they are.
+
+    Parameters
+    ----------
+    pos1 : tuple[int, int, int, int]
+        The (y1, x1, y2, x2) position of the first tile.
+    pos2 : tuple[int, int, int, int]
+        The (y1, x1, y2, x2) position of the second tile.
+    mask1_list : list[np.ndarray], optional
+        The list of binary masks from the first tile.
+    mask2_list : list[np.ndarray], optional
+        The list of binary masks from the second tile.
+    iou_threshold : float, optional
+        The minimum IoU for two intersecting contours to be considered a match and be merged.
+        Default is 0.5.
+
+    Returns
+    -------
+    list[np.ndarray]: A single list containing the new masks post-merge.
+    """
     if not mask1_list:
         return mask2_list if mask2_list else []
     if not mask2_list:

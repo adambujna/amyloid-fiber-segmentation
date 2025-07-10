@@ -11,7 +11,31 @@ from src.image_processing import add_noise
 FloatRange = Tuple[float, float]
 
 
-def get_noise_patch(noise_path: str, start_coords: tuple[int, int] = None, size: tuple[int, int] = (153, 206)):
+def get_noise_patch(noise_path: str, start_coords: tuple[int, int] = None,
+                    size: tuple[int, int] = (153, 206)) -> np.ndarray:
+    """
+    Loads a large noise image and extracts a smaller patch from it.
+
+    This function is used to get a unique noise pattern for each synthetic image
+    without needing to generate new noise every time.
+
+    Parameters
+    ----------
+    noise_path : str
+        The file path to the large, pre-generated noise image.
+    start_coords : tuple[int, int], optional
+        The (y, x) top-left coordinates for cropping the patch.
+        If None, a random position is chosen.
+        Default is None.
+    size : tuple[int, int], optional
+        The (height, width) of the patch to extract.
+        Noise looks different at different scales.
+        Default is (153, 206).
+
+    Returns
+    -------
+    np.ndarray: The extracted and normalized noise patch as a NumPy array.
+    """
     noise = cv.imread(noise_path, cv.IMREAD_GRAYSCALE)
     if noise is None:
         raise ValueError("Noise image could not be loaded.")
@@ -28,9 +52,40 @@ def get_noise_patch(noise_path: str, start_coords: tuple[int, int] = None, size:
 
 
 def noise_based_sample(noise: np.ndarray, clustering: float = 2, num_samples: int = 1,
-                       jitter: float = 0.01, direction_sampling_window: int = 23):
+                       jitter: float = 0.01, direction_sampling_window: int = 23) -> tuple[np.ndarray, list[int]]:
+    """
+    Samples points and directions from a noise map.
+
+    This method samples point locations from the noise map, treating pixel
+    intensity as a probability distribution.
+    For each point, it determines a direction by sampling from a small window around the point,
+    where pixels with higher intensity are more likely to be the target direction.
+
+    Parameters
+    ----------
+    noise : np.ndarray
+        The 2D noise map used as a probability distribution for sampling.
+    clustering : float, optional
+        An exponent applied to the noise map to increase contrast,
+        making sampling from high-intensity peaks more likely.
+        Default is 2.
+    num_samples : int, optional
+        The number of points to sample.
+        Default is 1.
+    jitter : float, optional
+        The maximum random offset (relative to image size)
+        to apply to the final normalized coordinates to add positional variance.
+        Default is 0.01.
+    direction_sampling_window : int, optional
+        The size in pixels of the square window around each point used to sample its direction.
+        Default is 23.
+
+    Returns
+    -------
+    tuple[np.ndarray, list[int]]: A tuple containing the normalized [y, x] coordinates and directions.
+    """
     if num_samples <= 0:
-        return [], []
+        return np.array([]), []
     # Choose random indexes based on noise as probability distribution
     p = noise.astype(np.float64).clip(30, 255) ** clustering
     flat = p.flatten()
@@ -58,9 +113,10 @@ def noise_based_sample(noise: np.ndarray, clustering: float = 2, num_samples: in
             np.linspace(-1, 1, local_patch.shape[1]),
             indexing='ij'
         )
+        # Angles of pixels in the local window
         local_angles = (np.degrees(np.arctan2(grid_y, grid_x)) + 360) % 360
         angle_choices = local_angles.flatten()
-
+        # Pick pixels based on noise and sample its angle
         sampled_angle = np.random.choice(angle_choices, p=local_flat)
         directions.append(int(sampled_angle))
 
@@ -79,7 +135,37 @@ def noise_based_sample(noise: np.ndarray, clustering: float = 2, num_samples: in
 
 
 def noise_based_sample_grad(noise: np.ndarray, clustering: float = 2, num_samples: int = 1,
-                            jitter: float = 0.01):
+                            jitter: float = 0.01) -> tuple[np.ndarray, list[int]]:
+    """
+    Samples points from a noise map based on its intensity
+    and directions from a noise map based on its gradient.
+
+    This method samples point locations similarly to `noise_based_sample`.
+    However, it determines the direction for each point by calculating the
+    gradient of the noise map at that location.
+    The final direction is set perpendicular to the gradient,
+    causing samples to align along the "ridges" or contours of the noise map.
+
+    Parameters
+    ----------
+    noise : np.ndarray
+        The 2D noise map used as a probability distribution for sampling.
+    clustering : float, optional
+        An exponent applied to the noise map to increase contrast,
+        making sampling from high-intensity peaks more likely.
+        Default is 2.
+    num_samples : int, optional
+        The number of points to sample.
+        Default is 1.
+    jitter : float, optional
+        The maximum random offset (relative to image size)
+        to apply to the final normalized coordinates to add positional variance.
+        Default is 0.01.
+
+    Returns
+    -------
+    tuple[np.ndarray, list[int]]: A tuple containing the normalized [y, x] coordinates and directions.
+    """
     if num_samples <= 0:
         return [], []
     # Choose random indexes based on noise as probability distribution
@@ -117,8 +203,42 @@ def noise_based_sample_grad(noise: np.ndarray, clustering: float = 2, num_sample
     return samples.clip(0, 1), directions
 
 
-def noise_based_sample_combined(noise: np.ndarray, clustering: float = 2, num_samples: int = 1,
-                                jitter: float = 0.01, direction_sampling_window: int = 23):
+def noise_based_sample_combined(noise: np.ndarray, clustering: float = 2,
+                                num_samples: int = 1, jitter: float = 0.01,
+                                direction_sampling_window: int = 23) -> tuple[np.ndarray, list[int]]:
+    """
+    Samples points from a noise map based on its intensity
+    and directions from a noise map based on a combination of its intensity and gradient.
+
+    This method calculates the sampled direction based on both the local intensity distribution
+    (like `noise_based_sample`)
+    and the gradient (like `noise_based_sample_grad`).
+    It then computes a weighted average of these two directions, where the weight
+    is determined by the local gradient's strength.
+
+    Parameters
+    ----------
+    noise : np.ndarray
+        The 2D noise map used as a probability distribution for sampling.
+    clustering : float, optional
+        An exponent applied to the noise map to increase contrast,
+        making sampling from high-intensity peaks more likely.
+        Default is 2.
+    num_samples : int, optional
+        The number of points to sample.
+        Default is 1.
+    jitter : float, optional
+        The maximum random offset (relative to image size)
+        to apply to the final normalized coordinates to add positional variance.
+        Default is 0.01.
+    direction_sampling_window : int, optional
+        The size in pixels of the square window around each point used to sample its direction.
+        Default is 23.
+
+    Returns
+    -------
+    tuple[np.ndarray, list[int]]: A tuple containing the normalized [y, x] coordinates and directions.
+    """
     if num_samples <= 0:
         return [], []
     # Choose random indexes based on noise as probability distribution
@@ -152,17 +272,22 @@ def noise_based_sample_combined(noise: np.ndarray, clustering: float = 2, num_sa
         local_angles = np.arctan2(grid_y, grid_x)
         angle_choices = local_angles.flatten()
 
+        # Sample based on the local window
         sampled_angle = np.random.choice(angle_choices, p=local_flat)
+
+        # Sample based on the gradient
         dx = gx[y, x]
         dy = gy[y, x]
         grad_angle = np.arctan2(dy, dx) + (0.5 * np.pi if np.random.random() < 0.5 else 1.5 * np.pi)
 
-        # Create weighted average
+        # Create weighted average of gradient and local window choice
+        # Gradient strength determines gradient weight in direction contribution
         grad_strength = np.hypot(dx, dy)
 
         grad_weight = grad_strength / (grad_strength + 1)
         noise_weight = 1.0 - grad_weight
 
+        # Combine angles based on weights
         x = grad_weight * np.cos(grad_angle) + noise_weight * np.cos(sampled_angle)
         y = grad_weight * np.sin(grad_angle) + noise_weight * np.sin(sampled_angle)
         final_angle = (np.rad2deg(np.arctan2(y, x)) + 360) % 360
@@ -185,7 +310,37 @@ def noise_based_sample_combined(noise: np.ndarray, clustering: float = 2, num_sa
 
 def get_fibre(image: np.ndarray, start_x: int, start_y: int,
               start_direction: int) -> tuple[np.ndarray, np.ndarray, tuple[float, float, float]]:
-    """Generates a fiber mask and inner mask with random properties."""
+    """
+    Generates the geometry of a single synthetic fiber as a binary masks.
+
+    The fiber is rendered as a curved segment of an ellipse with randomized
+    axes and length.
+    The function creates two boolean masks: one for the
+    main fiber body and another for the lighter inner core.
+
+    The function also calculates the offset of the center needed to align the fiber
+    with a starting direction and location and calculates the end location and direction
+    to allow for chaining of several fiber segments if desired.
+
+    Parameters
+    ----------
+    image : np.ndarray
+        A template image used to determine the output mask dimensions.
+    start_x : int
+        The x-coordinate for the start of the fiber.
+    start_y : int
+        The y-coordinate for the start of the fiber.
+    start_direction : int
+        The initial direction of the fiber in degrees.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray, tuple[float, float, float]]
+        A tuple containing:
+        - The boolean mask for the outer fiber.
+        - The boolean mask for the inner core.
+        - A tuple with the (x, y, angle) of the fiber's endpoint.
+    """
     a, b = [randint(50, 2000), randint(50, 2000)]  # Random axes
     angle = randint(1, min(180, int(60000 / max(a, b))))  # Limit fiber length
     start_direction = start_direction - 90  # OpenCV starts writing at 90 deg angles from starting point
@@ -228,7 +383,53 @@ def generate_fiber_image(image_size: tuple[int, int] = (2472, 3296),
                          image_name: str = None,
                          save_dir: str = None, label_dir: str = None,
                          gui: bool = False) -> np.ndarray:
-    """Generates an image with a random number of fibers and saves it with annotations."""
+    """
+    Generates an image containing multiple simulated fibers along with annotations.
+
+    Parameters
+    ----------
+    image_size : tuple[int, int], optional
+        The (height, width) of the output image.
+        Default is (2472, 3296).
+    num_fibers : int, optional
+        The number of fibers to generate in the image.
+    snr : float, optional
+        The target Signal-to-Noise Ratio for the final image.
+        Default is 4.5.
+    background_color : int, optional
+        The base grayscale intensity of the image background.
+        Default is 135.
+    fiber_color : int, optional
+        The base intensity for fibers.
+        If None, it's derived from the background color.
+        Default is None.
+    clustering : float, optional
+        The clustering factor passed to the noise sampling function.
+        Default is 2.0.
+    save : bool, optional
+        If True, saves the image and its annotations.
+        Default is False.
+    save_format : str, optional
+        The format for saving labels ('yolo', 'sam', or 'all').
+        Default is 'yolo'.
+    image_name : str, optional
+        The base name for the output files.
+        Required if `save` is True.
+    save_dir : str, optional
+        The directory to save the output image.
+        Required if `save` is True.
+    label_dir : str, optional
+        The directory to save the output annotations.
+        Required if `save` is True.
+    gui : bool, optional
+        If True, displays the generated image in a Matplotlib window.
+        Default is False.
+
+    Returns
+    -------
+    np.ndarray
+        The generated synthetic image as a NumPy array.
+    """
     if fiber_color is None:
         fiber_color = background_color / 1.53
 
@@ -317,8 +518,53 @@ def generate_multiple_images(num_images: int = 1,
                              save: bool = False, save_format: str = 'yolo',
                              image_list_file: str = None, save_dir: str = None, label_dir: str = None,
                              gui: bool = False):
-    """Generates multiple fiber images and saves them along with their annotations."""
+    """
+    Generates multiple synthetic fiber images with varied properties.
 
+    This function acts as a wrapper around `generate_fiber_image`.
+    It loops a specified number of times, and in each iteration, it randomizes
+    the image parameters (like SNR, clustering, fiber count) based on the
+    provided ranges before calling the single image generator.
+
+    It also manages the creation of a text file listing the paths to all generated images.
+
+    Parameters
+    ----------
+    num_images : int, optional
+        The total number of images to generate.
+        Default is 1.
+    start_index : int, optional
+        The starting index for numbering the output image files.
+        Default is 0.
+    image_size : tuple[int, int], optional
+        The (height, width) of all generated images.
+    snr_range : tuple[float, float], optional
+        The (min, max) range from which to sample the SNR for each image.
+    clustering_range : tuple[int, int], optional
+        The (min, max) range for the clustering parameter.
+    bg_color_range : tuple[int, int], optional
+        The (min, max) range for the background color.
+    bg_sn_ratio : tuple[float, float], optional
+        The (min, max) range for the background-to-signal intensity ratio.
+    fibers : tuple[int, int], optional
+        A tuple of (mean, std_dev) for a Normal distribution from which the
+        number of fibers for each image is sampled.
+    save : bool, optional
+        If True, saves all generated images and labels.
+    save_format : str, optional
+        The annotation format ('yolo', 'sam', or 'all').
+    image_list_file : str, optional
+        Path to the output .txt file that will list all generated image paths.
+        Required if `save` is True.
+    save_dir : str, optional
+        Directory to save the output images.
+        Required if `save` is True.
+    label_dir : str, optional
+        Directory to save the output labels.
+        Required if `save` is True.
+    gui : bool, optional
+        If True, images as they are being generated in a live window.
+    """
     image_names = []
 
     ax = None
@@ -333,13 +579,16 @@ def generate_multiple_images(num_images: int = 1,
         snr = np.random.uniform(snr_range[0], snr_range[1])
         clustering = randint(clustering_range[0], clustering_range[1])
         bg_color = randint(bg_color_range[0], bg_color_range[1])
+
         if bg_sn_ratio is not None:
             sn_color = int(bg_color / np.random.uniform(bg_sn_ratio[0], bg_sn_ratio[1]))
         else:
             sn_color = int(bg_color / 1.53)
+
         num_fibers = max(0, int(np.random.normal(loc=fibers[0], scale=fibers[1])))
         print(f"Generating image {i + 1}/{num_images}\n",
               "snr:", snr, "cluster:", clustering, "bgcolor:", bg_color, "sncolor:", sn_color, "nfibs:", num_fibers)
+
         # Generate image
         name = f'snr{"{:.3f}".format(snr)}_cluster{clustering}_bg{bg_color}_sn{sn_color}_n{num_fibers}_image_{j}'
         image_names.append(name)
@@ -356,12 +605,15 @@ def generate_multiple_images(num_images: int = 1,
         if gui:
             if ax is None:
                 continue
+
             ax.clear()
             ax.imshow(new_img, cmap='gray', vmin=0.0, vmax=255.0)
+
             if save:
                 ax.set_title(f'Fibres: {num_fibers}', pad=20)
             else:
                 ax.set_title(f'Fibres: {num_fibers}')
+
             plt.suptitle(f'Image {i + 1}/{num_images}')
             if save:
                 ax.text(0, 0, f'{os.path.abspath(save_dir)}/{name}.png', va='bottom')
