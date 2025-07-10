@@ -130,6 +130,7 @@ celerybeat.pid
 # Environments
 .env
 .venv
+.idea
 env/
 venv/
 ENV/
@@ -192,3 +193,22 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+# Not relevant
+.gitignore
+/data/real datasets/
+/data/datasets/sam_dataset/
+/data/datasets/source_dataset/
+/data/datasets/yolo_dataset/
+/data/datasets/sam_dataset.zip
+/data/datasets/yolo_dataset.zip
+/data/original_images/
+/local_env_backup/
+/tests/
+/notebooks/figures/
+/data/real datasets/
+/data/datasets/real_dataset/
+/data/sam ckpts/
+/data/results/sam ckpts/
+/model_training_full/
+/data/datasets/real_dataset.zip
