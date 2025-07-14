@@ -514,7 +514,7 @@ def generate_multiple_images(num_images: int = 1,
                              clustering_range: tuple[int, int] = (0, 10),
                              bg_color_range: tuple[int, int] = (30, 220),
                              bg_sn_ratio: tuple[float, float] = None,
-                             fibers: tuple[int, int] = (100, 20),
+                             fibers: tuple[int, int] = (60, 20),
                              save: bool = False, save_format: str = 'yolo',
                              image_list_file: str = None, save_dir: str = None, label_dir: str = None,
                              gui: bool = False):
