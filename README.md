@@ -6,7 +6,7 @@ The core of this work includes a custom framework for generating synthetic elect
 
 
 
-## Key Features
+## Features
 - Synthetic Data Generation: A procedural framework to generate synthetic EM images of amyloid fibres with control over clustering, signal-to-noise ratio, intensity, and other parameters.
 
 - Tiling and Merging Pipeline: An advanced system for processing large-resolution micrographs by tiling them into smaller, overlapping patches for model inference and intelligently merging the results.
