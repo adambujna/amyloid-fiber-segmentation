@@ -30,6 +30,7 @@ The core of this work includes a custom framework for generating synthetic elect
 ├── model_checkpoints/        # Trained model weights (.pt files)
 ├── model_training/           # Output of model training
 ├── notebooks/                # Jupyter notebooks for analysis and visualizations
+├── remote_envs/              # Settings for initializing pixi environments capable of running model training
 ├── src/                      # Main source code
 │   ├── __init__.py
 │   ├── annotation_utils.py   # Helpers for loading/saving annotations
