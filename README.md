@@ -65,7 +65,7 @@ source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
 ```
 For conda (replace `env_name` with the desired virtual environment name):
 ```
-conda create --name env_name python=3.12
+conda create --name env_name python=3.11
 conda activate env_name
 ```
 4. Install the dependencies
