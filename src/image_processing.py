@@ -79,7 +79,9 @@ def get_length(mask: np.ndarray) -> float:
     -------
     float: The length of the skeleton.
     """
-    mask *= 255 / np.max(mask)
+    if np.max(mask) == 0:
+        return 0
+    mask *= np.uint8(min(255 / np.max(mask), 255))
     skeleton = cv.ximgproc.thinning(mask, thinningType=cv.ximgproc.THINNING_ZHANGSUEN)
     return np.sum(skeleton > 0)
 
