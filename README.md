@@ -4,9 +4,9 @@ This repository contains the source code and resources for the Bachelor's Thesis
 
 The core of this work includes a custom framework for generating synthetic electron microscopy (EM) images, along with pipelines for training and evaluating state-of-the-art models like YOLOv11 and the Segment Anything Model (SAM).
 
----
 
-## Key Features
+
+## Features
 - Synthetic Data Generation: A procedural framework to generate synthetic EM images of amyloid fibres with control over clustering, signal-to-noise ratio, intensity, and other parameters.
 
 - Tiling and Merging Pipeline: An advanced system for processing large-resolution micrographs by tiling them into smaller, overlapping patches for model inference and intelligently merging the results.
@@ -15,7 +15,7 @@ The core of this work includes a custom framework for generating synthetic elect
 
 - Model Implementations: Ready-to-use segmenter classes for YOLOv11 and SAM, designed for the specific task of fibre segmentation.
 
----
+
 
 ## Project Structure
 
@@ -30,6 +30,7 @@ The core of this work includes a custom framework for generating synthetic elect
 ├── model_checkpoints/        # Trained model weights (.pt files)
 ├── model_training/           # Output of model training
 ├── notebooks/                # Jupyter notebooks for analysis and visualizations
+├── remote_envs/              # Settings for initializing environments capable of running model training as well as modified model source files used for training
 ├── src/                      # Main source code
 │   ├── __init__.py
 │   ├── annotation_utils.py   # Helpers for loading/saving annotations
@@ -43,6 +44,114 @@ The core of this work includes a custom framework for generating synthetic elect
 │   └── tiling.py             # Functions for image and annotation tiling and reconstruction
 ├── README.md
 └── requirements.txt          # Dependencies
+```
+
+
+
+## Installation
+
+Intallation is straightforward and only requires cloning the repository and installing all requirements.
+
+1. Clone the repo
+```
+git clone https://github.com/adambujna/amyloid-fibre-segmentation.git
+cd your-repository-name
+```
+2. Create a virtual environment or a conda environment (Optional)
+For venv:
+```
+python -m venv venv
+source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
+```
+For conda (replace `env_name` with the desired virtual environment name):
+```
+conda create --name env_name python=3.11
+conda activate env_name
+```
+4. Install the dependencies
+```
+pip install -r requirements.txt
+```
+> Note: _Ensure that you have the correct PyTorch version for your hardware installed. Getting PyTorch versions which function can require a bit of trial and error._
+
+
+## Usage
+
+Unfortunately, passing arguments from the command line into scripts is not implemented yet.
+
+#### 1. Generating datasets
+
+You can generate a synthetic dataset using the `generate_multiple_images` function in the `data_generation.py` script. Generate a dataset into a specified folder by running the function as shown below. To show the generated images pass `gui=True`.
+```Python
+from src.data_generation import generate_multiple_images
+
+generate_multiple_images(num_images=10,
+                         start_index=0,
+                         image_size=(2472, 3296),
+                         snr_range=(1.5, 12.0),
+                         clustering_range=(0, 10),
+                         bg_color_range=(30, 220),
+                         bg_sn_ratio=None,
+                         fibers=(60, 20),
+                         save=True,
+                         save_format='both',
+                         image_list_file='image_list.txt',
+                         save_dir='./images/',
+                         label_dir='./labels/',
+                         gui=True)
+
+```
+This will generate 10 images in the `images/` folder with characteristics chosen from the given ranges.
+
+Rescaling and tiling the images and the generation of new annotation files is automatically handled by the `split_images_dir` (for tiling) and `resize_image_dir` (resize) functions from the `data_utils.py` script. However, it is best to just generate square images and then resize them as overlapping regions of tiles will be duplicated in multiple images.
+
+---
+
+#### 2. Evaluating a model
+
+Starting from a trained model and a suitable dataset in the SA-1B or YOLO COCO-segmentation format you can evaluate any SAM or YOLO model weights by using functions from the script `model_eval.py`.
+- **For YOLO or SAM with automatic mask generation (unprompted):** use `evaluate_model`.
+- **SAM with ground-truth prompting (points):** use `evaluate_model_prompt`.
+For example:
+```Python
+from src.data_utils import evaluate_model, evaluate_model_prompt
+
+evaluate_model_prompt(
+    model='./model_checkpoints/sam2.1tiny-finetuned_sam2.1_t.pt',
+    test_image_dir='./data/synthetic_dataset/test/images',
+    test_annotation_dir='./data/synthetic_dataset/test/labels',
+    n_points=1,
+    output_file='results.csv',  # Results for each image will be written here along with image metadata (if applicable)
+    use_sam_annots=True,
+    seed=None,
+    verbose=True)
+
+```
+
+---
+
+#### 3. Running Inference on a Single Image
+
+You can use the `models.py` script to run inference on a single image and visualize the results. To do this initialize a `Yolo11SegmenterEM` (for YOLOv11 models) or a `SAM2SegmenterEM` (for SAM models) object. A call to this object with an image array or path to an image will return the predicted segmentation masks.
+
+The image on which inference is run does not have to be square or of the required input size, as the model will automatically tile, resize it and then reconcile the predictions.
+
+Example:
+```Python
+from src.models import Yolo11SegmenterEM, SAM2SegmenterEM
+from src.gui import plot_masks
+
+sam_model = SAM2SegmenterEM(weights='./model_checkpoints/sam2.1tiny-finetuned_sam2.1_t.pt')
+
+predicted_masks = sam_model(img='./images/image_1.png',
+                            plot=False,
+                            save=False,
+                            points=np.array([[150, 150], [650, 500]]),
+                            bboxes=[[100, 100, 200, 200], [600, 400, 300, 300]],
+                            masks=[np.zeros((1024, 1365)), np.zeros((1024, 1365))])
+
+plot_masks(predicted_masks, './images/image_1.png')
+
 ```
 
 
