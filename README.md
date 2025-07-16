@@ -57,18 +57,22 @@ Intallation is straightforward and only requires cloning the repository and inst
 git clone https://github.com/adambujna/amyloid-fibre-segmentation.git
 cd your-repository-name
 ```
+
 2. Create a virtual environment or a conda environment (Optional)
+
 For venv:
 ```
 python -m venv venv
 source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
 ```
+
 For conda (replace `env_name` with the desired virtual environment name):
 ```
 conda create --name env_name python=3.11
 conda activate env_name
 ```
-4. Install the dependencies
+
+3. Install the dependencies
 ```
 pip install -r requirements.txt
 ```
