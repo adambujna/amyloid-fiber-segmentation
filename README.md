@@ -116,6 +116,7 @@ Rescaling and tiling the images and the generation of new annotation files is au
 Starting from a trained model and a suitable dataset in the SA-1B or YOLO COCO-segmentation format you can evaluate any SAM or YOLO model weights by using functions from the script `model_eval.py`.
 - **For YOLO or SAM with automatic mask generation (unprompted):** use `evaluate_model`.
 - **SAM with ground-truth prompting (points):** use `evaluate_model_prompt`.
+
 For example:
 ```Python
 from src.data_utils import evaluate_model, evaluate_model_prompt
