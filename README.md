@@ -50,7 +50,7 @@ This work includes a custom framework for generating synthetic electron microsco
 
 ## Installation
 
-Intallation is straightforward and only requires cloning the repository and installing all requirements.
+Installation is straightforward and only requires cloning the repository and installing all requirements.
 
 1. Clone the repo
 ```Shell
